@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Four-Bar Linkage Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        input[type=range] {
+            accent-color: #3b82f6;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row h-screen">
+
+    <!-- Sidebar UI Controls -->
+    <div class="w-full md:w-96 bg-slate-800 border-r border-slate-700 flex flex-col z-10 shadow-xl overflow-y-auto">
+        <div class="p-6 border-b border-slate-700">
+            <h1 class="text-xl font-bold text-white mb-2">Four-Bar CPM Simulator</h1>
+            <p class="text-sm text-slate-400">Analyze the transmission angle constraints of a Grashof Crank-Rocker.</p>
+        </div>
+
+        <div class="p-6 flex-grow space-y-6">
+            
+            <!-- Real-Time Status Dashboard -->
+            <div class="bg-slate-900 rounded-lg p-4 border border-slate-700 space-y-4 shadow-inner">
+                <!-- Grashof Status -->
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-sm font-semibold text-slate-400">Kinematic State</span>
+                    <span id="grashofStatus" class="text-sm font-bold text-white">--</span>
+                </div>
+                
+                <!-- Rocker Sweep Status -->
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-sm font-semibold text-slate-400">Rocker Sweep</span>
+                    <span id="sweepAngleValue" class="text-sm font-bold text-sky-400">--°</span>
+                </div>
+
+                <!-- Static Min Trans. Angle Status -->
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-sm font-semibold text-slate-400" title="Calculated analytically using bounds">Min Trans. Angle</span>
+                    <span id="minMuSweepValue" class="text-sm font-bold">--°</span>
+                </div>
+
+                <!-- Transmission Angle Status -->
+                <div class="space-y-1 text-center">
+                    <span class="text-xs font-semibold text-slate-400 block uppercase tracking-wide mb-1">Transmission Angle (&mu;)</span>
+                    <div id="muContainer" class="text-3xl font-bold font-mono transition-colors duration-200">
+                        <span id="muValue">--°</span>
+                    </div>
+                    <div id="muWarning" class="text-xs font-medium text-red-500 invisible mt-1">
+                        Critical: Binding Risk! &mu; &lt; 40&deg; or &gt; 140&deg;
+                    </div>
+                </div>
+            </div>
+
+            <!-- Link Length Controls -->
+            <div class="space-y-4">
+                <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider">Link Lengths</h3>
+                
+                <!-- Crank -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <label class="font-medium text-red-400">Crank (L2)</label>
+                        <span id="valCrank" class="text-slate-400 font-mono">40</span>
+                    </div>
+                    <input type="range" id="sliderCrank" min="20" max="150" value="40" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+                
+                <!-- Coupler -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <label class="font-medium text-cyan-400">Coupler (L3)</label>
+                        <span id="valCoupler" class="text-slate-400 font-mono">120</span>
+                    </div>
+                    <input type="range" id="sliderCoupler" min="50" max="250" value="120" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <!-- Rocker -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <label class="font-medium text-emerald-400">Rocker (L4)</label>
+                        <span id="valRocker" class="text-slate-400 font-mono">100</span>
+                    </div>
+                    <input type="range" id="sliderRocker" min="50" max="250" value="100" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <!-- Ground -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <label class="font-medium text-slate-300">Ground (L1)</label>
+                        <span id="valGround" class="text-slate-400 font-mono">140</span>
+                    </div>
+                    <input type="range" id="sliderGround" min="50" max="250" value="140" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Animation Controls -->
+            <div class="space-y-4 pt-4 border-t border-slate-700">
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <label class="font-medium text-slate-300">Animation Speed</label>
+                        <span id="valSpeed" class="text-slate-400 font-mono">1x</span>
+                    </div>
+                    <input type="range" id="sliderSpeed" min="0.1" max="3" step="0.1" value="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+                
+                <button id="playBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded shadow-lg transition-colors">
+                    Pause Animation
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Canvas Area -->
+    <div class="flex-grow canvas-container relative">
+        <!-- Error Overlay for broken linkage -->
+        <div id="errorOverlay" class="absolute inset-0 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm hidden z-20">
+            <div class="text-center p-6 bg-slate-800 rounded-xl border border-red-500/50 shadow-2xl">
+                <h2 class="text-2xl font-bold text-red-500 mb-2">Linkage Broken</h2>
+                <p class="text-sm text-slate-300">The current link lengths cannot form a closed loop at this angle.</p>
+                <p class="text-xs text-slate-400 mt-2">Try reducing Crank length or increasing Coupler/Rocker.</p>
+            </div>
+        </div>
+        
+        <!-- Sweep Legend Overlay -->
+        <div class="absolute top-4 left-4 bg-slate-900/90 border border-slate-700 p-3 rounded-lg shadow-lg pointer-events-none z-10 text-xs">
+            <h4 class="font-bold text-slate-200 mb-2 uppercase tracking-wide">Sweep Analysis</h4>
+            <div class="space-y-1.5">
+                <div class="flex items-center gap-2"><div class="w-3 h-1 bg-green-500 rounded"></div><span class="text-slate-300">Good Sweep (40&deg; - 140&deg;)</span></div>
+                <div class="flex items-center gap-2"><div class="w-3 h-1 bg-red-500 rounded"></div><span class="text-slate-300">Critical Sweep (&lt;40&deg; or &gt;140&deg;)</span></div>
+                <div class="flex items-center gap-2 mt-2 pt-1 border-t border-slate-700"><div class="w-3 h-0 border-t-2 border-dashed border-slate-400"></div><span class="text-slate-300">Outer: Forward Stroke</span></div>
+                <div class="flex items-center gap-2"><div class="w-3 h-0 border-t-2 border-solid border-slate-400"></div><span class="text-slate-300">Inner: Return Stroke</span></div>
+            </div>
+        </div>
+
+        <canvas id="mechCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mechCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI Elements
+        const sliders = {
+            crank: document.getElementById('sliderCrank'),
+            coupler: document.getElementById('sliderCoupler'),
+            rocker: document.getElementById('sliderRocker'),
+            ground: document.getElementById('sliderGround'),
+            speed: document.getElementById('sliderSpeed')
+        };
+        const labels = {
+            crank: document.getElementById('valCrank'),
+            coupler: document.getElementById('valCoupler'),
+            rocker: document.getElementById('valRocker'),
+            ground: document.getElementById('valGround'),
+            speed: document.getElementById('valSpeed')
+        };
+        const displays = {
+            grashof: document.getElementById('grashofStatus'),
+            sweep: document.getElementById('sweepAngleValue'),
+            minMuSweep: document.getElementById('minMuSweepValue'),
+            muValue: document.getElementById('muValue'),
+            muContainer: document.getElementById('muContainer'),
+            muWarning: document.getElementById('muWarning'),
+            overlay: document.getElementById('errorOverlay')
+        };
+        const playBtn = document.getElementById('playBtn');
+
+        // State
+        let isPlaying = true;
+        let theta2 = 0; // Crank angle
+        let assemblyValid = true;
+        let rockerMinAngle = 0;
+        let rockerMaxAngle = 0;
+        let rockerSweepDeg = 0;
+        let isFullRotation = false;
+
+        // Resize Canvas
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resize);
+        
+        // Kinematics Math
+        function checkGrashof(L1, L2, L3, L4) {
+            const lengths = [L1, L2, L3, L4];
+            lengths.sort((a, b) => a - b);
+            const S = lengths[0];
+            const L = lengths[3];
+            const P = lengths[1];
+            const Q = lengths[2];
+            
+            if (S + L <= P + Q) {
+                if (S === L2) return "Grashof Crank-Rocker";
+                if (S === L1) return "Grashof Double-Crank";
+                return "Grashof Double-Rocker";
+            } else {
+                return "Non-Grashof (No continuous rotation)";
+            }
+        }
+
+        // Circle intersection. Returns array of 0, 1, or 2 points.
+        function intersectCircles(p1, r1, p2, r2) {
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const d = Math.sqrt(dx*dx + dy*dy);
+            
+            if (d > r1 + r2 || d < Math.abs(r1 - r2) || d === 0) return []; // No intersection
+
+            const a = (r1*r1 - r2*r2 + d*d) / (2 * d);
+            const h = Math.sqrt(Math.max(0, r1*r1 - a*a));
+            const p3 = {
+                x: p1.x + a * dx / d,
+                y: p1.y + a * dy / d
+            };
+
+            const int1 = {
+                x: p3.x + h * dy / d,
+                y: p3.y - h * dx / d
+            };
+            const int2 = {
+                x: p3.x - h * dy / d,
+                y: p3.y + h * dx / d
+            };
+            
+            return [int1, int2];
+        }
+
+        // Main Solver
+        function solveLinkage(theta, L1, L2, L3, L4) {
+            const O2 = { x: 0, y: 0 };
+            const O4 = { x: L1, y: 0 };
+            
+            // 1. Calculate Crank tip (A)
+            const A = {
+                x: O2.x + L2 * Math.cos(theta),
+                y: O2.y + L2 * Math.sin(theta)
+            };
+
+            // 2. Calculate Diagonal distance from A to O4
+            const dx = O4.x - A.x;
+            const dy = O4.y - A.y;
+            const diagonalSq = dx*dx + dy*dy;
+            const diagonal = Math.sqrt(diagonalSq);
+
+            // 3. Intersect circles to find B
+            const B_ints = intersectCircles(A, L3, O4, L4);
+            
+            if (B_ints.length === 0) {
+                return null; // Linkage broken
+            }
+            
+            // Usually branch 1 (the upper/outer one) is the standard configuration
+            // We use cross product to maintain assembly mode
+            let B = B_ints[0];
+            if (B_ints.length > 1 && (B_ints[1].y > B_ints[0].y)) {
+                B = B_ints[1];
+            }
+
+            // 4. Calculate Transmission Angle using Law of Cosines
+            // mu = acos( (L3^2 + L4^2 - diagonal^2) / (2 * L3 * L4) )
+            let cosMu = (L3*L3 + L4*L4 - diagonalSq) / (2 * L3 * L4);
+            // Clamp floating point errors
+            cosMu = Math.max(-1, Math.min(1, cosMu)); 
+            const muRad = Math.acos(cosMu);
+            const muDeg = muRad * (180 / Math.PI);
+
+            return { O2, O4, A, B, muDeg, muRad };
+        }
+
+        function updateUI(sol, L1, L2, L3, L4) {
+            // Update Grashof status
+            const grashofStatus = checkGrashof(L1, L2, L3, L4);
+            displays.grashof.textContent = grashofStatus;
+            
+            if (grashofStatus.includes("Crank-Rocker")) {
+                displays.grashof.className = "text-sm font-bold text-green-400";
+            } else if (grashofStatus.includes("Non-Grashof")) {
+                displays.grashof.className = "text-sm font-bold text-red-400";
+            } else {
+                displays.grashof.className = "text-sm font-bold text-yellow-400";
+            }
+
+            // Update Transmission Angle
+            if (!sol) {
+                displays.overlay.classList.remove('hidden');
+                assemblyValid = false;
+                displays.muValue.textContent = "--°";
+                displays.muContainer.className = "text-3xl font-bold font-mono text-slate-500 transition-colors duration-200";
+                displays.muWarning.classList.add('invisible');
+                return;
+            }
+            
+            displays.overlay.classList.add('hidden');
+            assemblyValid = true;
+
+            const safeMu = sol.muDeg >= 40 && sol.muDeg <= 140;
+
+            displays.muValue.textContent = sol.muDeg.toFixed(1) + '°';
+            
+            if (safeMu) {
+                displays.muContainer.className = "text-3xl font-bold font-mono text-green-500 transition-colors duration-200 drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]";
+                displays.muWarning.classList.add('invisible');
+            } else {
+                displays.muContainer.className = "text-3xl font-bold font-mono text-red-500 transition-colors duration-200 animate-pulse drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]";
+                displays.muWarning.classList.remove('invisible');
+            }
+        }
+
+        // Draw utilities
+        function drawLine(p1, p2, color, width=6) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+        }
+
+        function drawJoint(p, color='#fff', size=5) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#1e293b';
+            ctx.stroke();
+        }
+
+        function drawGroundPivot(p) {
+            ctx.beginPath();
+            ctx.moveTo(p.x - 12, p.y - 10);
+            ctx.lineTo(p.x + 12, p.y - 10);
+            ctx.lineTo(p.x, p.y + 5);
+            ctx.closePath();
+            ctx.fillStyle = '#64748b'; // slate-500
+            ctx.fill();
+            drawJoint(p, '#cbd5e1', 6);
+        }
+
+        // Main Draw Loop
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const L2 = parseFloat(sliders.crank.value);
+            const L3 = parseFloat(sliders.coupler.value);
+            const L4 = parseFloat(sliders.rocker.value);
+            const L1 = parseFloat(sliders.ground.value);
+
+            const sol = solveLinkage(theta2, L1, L2, L3, L4);
+            updateUI(sol, L1, L2, L3, L4);
+
+            // Setup Viewport Transform
+            ctx.save();
+            const scale = 1.8;
+            // Center mechanism
+            const offsetX = canvas.width / 2 - (L1 * scale / 2);
+            const offsetY = canvas.height / 2 + 100;
+            
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(scale, -scale); // Invert Y so up is positive
+
+            if (assemblyValid) {
+                // Pre-calculate 360 sweep for visual paths
+                let sweepData = [];
+                let prevA = null;
+                let unwrap = 0;
+                for (let i = 0; i < 360; i++) {
+                    let t = i * Math.PI / 180;
+                    let solPt = solveLinkage(t, L1, L2, L3, L4);
+                    if (solPt) {
+                        let angle = Math.atan2(solPt.B.y - solPt.O4.y, solPt.B.x - solPt.O4.x);
+                        if (prevA !== null) {
+                            let diff = angle - prevA;
+                            if (diff > Math.PI) unwrap -= 2 * Math.PI;
+                            if (diff < -Math.PI) unwrap += 2 * Math.PI;
+                        }
+                        prevA = angle;
+                        sweepData.push({ t4: angle + unwrap, mu: solPt.muDeg });
+                    }
+                }
+
+                if (sweepData.length > 0) {
+                    let minVal = Infinity, maxVal = -Infinity;
+                    let minIdx = 0, maxIdx = 0;
+                    sweepData.forEach((d, i) => {
+                        if (d.t4 < minVal) { minVal = d.t4; minIdx = i; }
+                        if (d.t4 > maxVal) { maxVal = d.t4; maxIdx = i; }
+                    });
+
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = 'round';
+                    
+                    // Draw Forward Sweep (Outer)
+                    let curr = minIdx;
+                    while (curr !== maxIdx && sweepData.length > 1) {
+                        let next = (curr + 1) % sweepData.length;
+                        let p1 = sweepData[curr];
+                        let p2 = sweepData[next];
+                        
+                        ctx.strokeStyle = (p1.mu >= 40 && p1.mu <= 140) ? '#22c55e' : '#ef4444';
+                        ctx.beginPath();
+                        ctx.moveTo(L1 + (L4 + 10) * Math.cos(p1.t4), (L4 + 10) * Math.sin(p1.t4));
+                        ctx.lineTo(L1 + (L4 + 10) * Math.cos(p2.t4), (L4 + 10) * Math.sin(p2.t4));
+                        ctx.stroke();
+                        
+                        curr = next;
+                    }
+
+                    // Draw Return Sweep (Inner)
+                    curr = maxIdx;
+                    while (curr !== minIdx && sweepData.length > 1) {
+                        let next = (curr + 1) % sweepData.length;
+                        let p1 = sweepData[curr];
+                        let p2 = sweepData[next];
+                        
+                        ctx.strokeStyle = (p1.mu >= 40 && p1.mu <= 140) ? '#22c55e' : '#ef4444';
+                        ctx.beginPath();
+                        ctx.moveTo(L1 + (L4 - 10) * Math.cos(p1.t4), (L4 - 10) * Math.sin(p1.t4));
+                        ctx.lineTo(L1 + (L4 - 10) * Math.cos(p2.t4), (L4 - 10) * Math.sin(p2.t4));
+                        ctx.stroke();
+                        
+                        curr = next;
+                    }
+                }
+            }
+
+            if (sol) {
+                // Ground
+                drawLine(sol.O2, sol.O4, '#334155', 8); // Dashed/solid slate
+
+                // Draw Sweep Arc for Rocker Tip
+                if (rockerSweepDeg > 0) {
+                    ctx.beginPath();
+                    if (isFullRotation) {
+                        ctx.arc(sol.O4.x, sol.O4.y, L4, 0, 2 * Math.PI);
+                    } else {
+                        ctx.arc(sol.O4.x, sol.O4.y, L4, rockerMinAngle, rockerMaxAngle);
+                    }
+                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)'; // Faint sky blue
+                    ctx.lineWidth = 15;
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+                }
+
+                // Draw Transmission Angle Arc and Text
+                const safeMu = sol.muDeg >= 40 && sol.muDeg <= 140;
+                const arcColor = safeMu ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+                const arcBorder = safeMu ? '#22c55e' : '#ef4444';
+                
+                const angleCoupler = Math.atan2(sol.A.y - sol.B.y, sol.A.x - sol.B.x);
+                const angleRocker = Math.atan2(sol.O4.y - sol.B.y, sol.O4.x - sol.B.x);
+                
+                // Ensure arc draws the interior angle
+                let startAngle = angleCoupler;
+                let endAngle = angleRocker;
+                
+                // Draw arc sector
+                ctx.beginPath();
+                ctx.moveTo(sol.B.x, sol.B.y);
+                ctx.arc(sol.B.x, sol.B.y, 30, startAngle, endAngle, (endAngle - startAngle > Math.PI || endAngle - startAngle < -Math.PI));
+                ctx.closePath();
+                ctx.fillStyle = arcColor;
+                ctx.fill();
+                
+                // Draw arc stroke
+                ctx.beginPath();
+                ctx.arc(sol.B.x, sol.B.y, 30, startAngle, endAngle, (endAngle - startAngle > Math.PI || endAngle - startAngle < -Math.PI));
+                ctx.strokeStyle = arcBorder;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Diagonal (Imaginary line for reference)
+                ctx.beginPath();
+                ctx.moveTo(sol.A.x, sol.A.y);
+                ctx.lineTo(sol.O4.x, sol.O4.y);
+                ctx.strokeStyle = '#475569'; // slate-600
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]); // Reset
+
+                // Links
+                drawLine(sol.O2, sol.A, '#ef4444', 6);       // Crank (Red)
+                drawLine(sol.A, sol.B, '#06b6d4', 6);        // Coupler (Cyan)
+                drawLine(sol.O4, sol.B, '#10b981', 6);       // Rocker (Emerald)
+
+                // Joints
+                drawJoint(sol.A);
+                drawJoint(sol.B);
+                
+                // Render Mu Text on Canvas near joint B
+                ctx.save();
+                ctx.scale(1, -1); // Un-invert Y for text
+                ctx.font = "bold 14px Inter";
+                ctx.fillStyle = safeMu ? '#4ade80' : '#f87171';
+                // Adjust text position slightly offset from B
+                ctx.fillText(`μ = ${sol.muDeg.toFixed(1)}°`, sol.B.x - 30, -sol.B.y - 40);
+                ctx.restore();
+            }
+
+            // Ground Pivots
+            const O2 = { x: 0, y: 0 };
+            const O4 = { x: L1, y: 0 };
+            drawGroundPivot(O2);
+            drawGroundPivot(O4);
+
+            ctx.restore();
+        }
+
+        function animate() {
+            if (isPlaying && assemblyValid) {
+                const speed = parseFloat(sliders.speed.value);
+                theta2 += 0.03 * speed;
+                if (theta2 > Math.PI * 2) theta2 -= Math.PI * 2;
+            }
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        // Event Listeners
+        function syncLabels() {
+            labels.crank.textContent = sliders.crank.value;
+            labels.coupler.textContent = sliders.coupler.value;
+            labels.rocker.textContent = sliders.rocker.value;
+            labels.ground.textContent = sliders.ground.value;
+            labels.speed.textContent = sliders.speed.value + 'x';
+            
+            calculateSweep();
+
+            // If paused, force a redraw to show slider changes immediately
+            if (!isPlaying) draw();
+        }
+
+        function calculateSweep() {
+            const L1 = parseFloat(sliders.ground.value);
+            const L2 = parseFloat(sliders.crank.value);
+            const L3 = parseFloat(sliders.coupler.value);
+            const L4 = parseFloat(sliders.rocker.value);
+
+            // Analytical absolute minimum transmission angle (worst-case acute angle)
+            const d_min = Math.abs(L1 - L2);
+            const d_max = L1 + L2;
+
+            function getAcuteMu(d) {
+                let cosM = (L3*L3 + L4*L4 - d*d) / (2 * L3 * L4);
+                cosM = Math.max(-1, Math.min(1, cosM)); // Clamp to valid domain
+                let mDeg = Math.acos(cosM) * (180 / Math.PI);
+                return Math.min(mDeg, 180 - mDeg); // Acute angle representation
+            }
+
+            const minMuAcute = Math.min(getAcuteMu(d_min), getAcuteMu(d_max));
+            displays.minMuSweep.textContent = minMuAcute.toFixed(1) + '°';
+            if (minMuAcute < 40) {
+                displays.minMuSweep.className = "text-sm font-bold text-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]";
+            } else {
+                displays.minMuSweep.className = "text-sm font-bold text-green-400";
+            }
+
+            let minA = Infinity;
+            let maxA = -Infinity;
+            let prevA = null;
+            let unwrap = 0;
+            let validCount = 0;
+
+            // Perform a quick 360-degree sweep to find the min and max angles of the rocker
+            for (let i = 0; i <= 360; i += 2) {
+                const t = i * Math.PI / 180;
+                const sol = solveLinkage(t, L1, L2, L3, L4);
+                if (sol) {
+                    let angle = Math.atan2(sol.B.y - sol.O4.y, sol.B.x - sol.O4.x);
+                    
+                    // Unwrapping logic to prevent 180 to -180 jumping which breaks max/min calcs
+                    if (prevA !== null) {
+                        let diff = angle - prevA;
+                        if (diff > Math.PI) unwrap -= 2 * Math.PI;
+                        if (diff < -Math.PI) unwrap += 2 * Math.PI;
+                    }
+                    prevA = angle;
+                    let unwrapped = angle + unwrap;
+                    
+                    if (unwrapped < minA) minA = unwrapped;
+                    if (unwrapped > maxA) maxA = unwrapped;
+                    validCount++;
+                }
+            }
+
+            if (validCount > 0) {
+                rockerMinAngle = minA;
+                rockerMaxAngle = maxA;
+                rockerSweepDeg = (maxA - minA) * (180 / Math.PI);
+                isFullRotation = (rockerSweepDeg > 355 && validCount > 170); // 360 sweep logic
+
+                if (isFullRotation) {
+                    displays.sweep.textContent = '360° (Full Rot.)';
+                } else {
+                    displays.sweep.textContent = rockerSweepDeg.toFixed(1) + '°';
+                }
+            } else {
+                rockerSweepDeg = 0;
+                displays.sweep.textContent = '--°';
+            }
+        }
+
+        Object.values(sliders).forEach(slider => {
+            slider.addEventListener('input', syncLabels);
+        });
+
+        playBtn.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            playBtn.textContent = isPlaying ? 'Pause Animation' : 'Play Animation';
+            playBtn.classList.toggle('bg-blue-600', isPlaying);
+            playBtn.classList.toggle('bg-slate-600', !isPlaying);
+        });
+
+        // Initialize
+        resize();
+        syncLabels();
+        animate();
+
+    </script>
+</body>
+</html>
